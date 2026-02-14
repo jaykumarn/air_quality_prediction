@@ -1,13 +1,24 @@
 {% extends 'layout.html' %}
 {% block content %}
-	<h5>Air Quailty Index</h5>
-	<ul class="list-group list-group-flush">
-		{% for item in prediction %}
-			<li style="font-size:22px;" class="list-group-item">{{ "%.3f"|format(item)  }}</li>
-		{% endfor %}
-	</ul>
-	<br>
-	<form action="{{ url_for('home') }}">
-		<input class="btn btn-info" type="submit" value="Make Another Prediction" >
-	</form>	
+
+  <h5>Air Quality Index (PM 2.5)</h5>
+
+  {% if request.form.get('city') %}
+  <p class="text-muted mb-1">
+    <strong>City:</strong> {{ request.form.get('city') }}
+  </p>
+  {% endif %}
+
+  <ul class="list-group list-group-flush mb-3">
+    {% for item in prediction %}
+      <li style="font-size:22px;" class="list-group-item">
+        {{ "%.3f"|format(item) }} &mu;g/m&sup3;
+      </li>
+    {% endfor %}
+  </ul>
+
+  <form action="{{ url_for('home') }}">
+    <input class="btn btn-info" type="submit" value="Make Another Prediction">
+  </form>
+
 {% endblock content %}

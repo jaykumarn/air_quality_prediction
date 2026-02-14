@@ -1,42 +1,183 @@
 {% extends 'layout.html' %}
 {% block content %}
+
 <h4 class="card-title">Enter the feature values for prediction</h4>
 <small class="text-danger">Please enter input in integers and floats only.</small>
 <hr>
-	<form action="{{ url_for('predict')}}" method="POST">
-		<div class="form-group">
-			<label for="T">T</label>
-			<input type="number" name="T" step="0.01" class="form-control" id="T" placeholder="Average Temperature (Celcius)" required>
-		</div>
-		<div class="form-group">
-			<label for="TM">TM</label>
-			<input type="number" name="TM" step="0.01" class="form-control" id="TM" placeholder="Maximum Temperature (Celcius)" required>
-		</div>
-		<div class="form-group">
-			<label for="Tm">Tm</label>
-			<input type="number" name="Tm" step="0.01" class="form-control" id="Tm" placeholder="Minimum Temperature (Celcius)" required>
-		</div>
-		<div class="form-group">
-			<label for="SLP">SLP</label>
-			<input type="number" name="SLP" step="0.01" class="form-control" id="SLP" placeholder="Atmospheric pressure at sea level (hectopascal)" required>
-		</div>
-		<div class="form-group">
-			<label for="H">H</label>
-			<input type="number" name="H" step="0.01" class="form-control" id="H" placeholder="Average relative humidity (Percentage)" required>
-		</div>
-		<div class="form-group">
-			<label for="VV">VV</label>
-			<input type="number" name="VV" step="0.01" class="form-control" id="VV" placeholder="Average visibility (Km)" required>
-		</div>
-		<div class="form-group">
-			<label for="V">V</label>
-			<input type="number" name="V" step="0.01" class="form-control" id="V" placeholder="Average wind speed (Km/h)" required>
-		</div>
-		<div class="form-group">
-			<label for="VM">VM</label>
-			<input type="number" name="VM" step="0.01" class="form-control" id="VM" placeholder="Maximum sustained wind speed (Km/h)" required>
-		</div>
-		<input type="submit" class="btn btn-primary btn-lg" value="Predict">
-		<input type="reset" class="btn btn-info btn-lg" value="Reset">
-	</form>
+
+<!-- ── City lookup ───────────────────────────────────────────────────────── -->
+<div class="form-group">
+  <label for="city_input">
+    <strong>City Name</strong>
+    <small class="text-muted ml-1">— type a city to auto-fill weather data</small>
+  </label>
+  <div class="input-group">
+    <input
+      type="text"
+      id="city_input"
+      class="form-control"
+      placeholder="e.g. Mumbai, London, New York"
+      autocomplete="off"
+    >
+    <div class="input-group-append">
+      <button
+        id="fetch_btn"
+        type="button"
+        class="btn btn-secondary"
+        onclick="fetchWeather()"
+      >
+        Fetch Weather
+      </button>
+    </div>
+  </div>
+  <!-- Status line shown while loading or on error -->
+  <small id="city_status" class="form-text"></small>
+</div>
+
+<hr>
+
+<!-- ── AQI prediction form ───────────────────────────────────────────────── -->
+<form action="{{ url_for('predict') }}" method="POST">
+
+  <!-- Hidden city field so it travels with the POST and appears on result -->
+  <input type="hidden" name="city" id="city_hidden">
+
+  <div class="form-group">
+    <label for="T">T &mdash; Average Temperature (°C)</label>
+    <input type="number" name="T" step="0.01" class="form-control" id="T"
+           placeholder="Average Temperature (Celsius)" required>
+  </div>
+
+  <div class="form-group">
+    <label for="TM">TM &mdash; Maximum Temperature (°C)</label>
+    <input type="number" name="TM" step="0.01" class="form-control" id="TM"
+           placeholder="Maximum Temperature (Celsius)" required>
+  </div>
+
+  <div class="form-group">
+    <label for="Tm">Tm &mdash; Minimum Temperature (°C)</label>
+    <input type="number" name="Tm" step="0.01" class="form-control" id="Tm"
+           placeholder="Minimum Temperature (Celsius)" required>
+  </div>
+
+  <div class="form-group">
+    <label for="SLP">SLP &mdash; Sea-Level Pressure (hPa)</label>
+    <input type="number" name="SLP" step="0.01" class="form-control" id="SLP"
+           placeholder="Atmospheric pressure at sea level (hectopascal)" required>
+  </div>
+
+  <div class="form-group">
+    <label for="H">H &mdash; Relative Humidity (%)</label>
+    <input type="number" name="H" step="0.01" class="form-control" id="H"
+           placeholder="Average relative humidity (Percentage)" required>
+  </div>
+
+  <div class="form-group">
+    <label for="VV">VV &mdash; Visibility (km)</label>
+    <input type="number" name="VV" step="0.01" class="form-control" id="VV"
+           placeholder="Average visibility (km)" required>
+  </div>
+
+  <div class="form-group">
+    <label for="V">V &mdash; Average Wind Speed (km/h)</label>
+    <input type="number" name="V" step="0.01" class="form-control" id="V"
+           placeholder="Average wind speed (km/h)" required>
+  </div>
+
+  <div class="form-group">
+    <label for="VM">VM &mdash; Maximum Wind Speed (km/h)</label>
+    <input type="number" name="VM" step="0.01" class="form-control" id="VM"
+           placeholder="Maximum sustained wind speed (km/h)" required>
+  </div>
+
+  <input type="submit" class="btn btn-primary btn-lg" value="Predict">
+  <input type="reset"  class="btn btn-info    btn-lg" value="Reset"
+         onclick="resetCity()">
+</form>
+
+<!-- ── JavaScript ────────────────────────────────────────────────────────── -->
+<script>
+  // Field IDs that are pre-filled from weather data
+  const WEATHER_FIELDS = ['T', 'TM', 'Tm', 'SLP', 'H', 'VV', 'V', 'VM'];
+
+  function setStatus(msg, type) {
+    // type: 'loading' | 'success' | 'error'
+    const el = document.getElementById('city_status');
+    const colours = { loading: 'text-muted', success: 'text-success', error: 'text-danger' };
+    el.className = 'form-text ' + (colours[type] || 'text-muted');
+    el.textContent = msg;
+  }
+
+  function highlightFields(colour) {
+    // Briefly flash the pre-filled inputs so the user notices the change
+    WEATHER_FIELDS.forEach(id => {
+      const el = document.getElementById(id);
+      el.style.transition = 'background-color 0.4s';
+      el.style.backgroundColor = colour;
+      setTimeout(() => { el.style.backgroundColor = ''; }, 1200);
+    });
+  }
+
+  function fetchWeather() {
+    const city = document.getElementById('city_input').value.trim();
+    if (!city) {
+      setStatus('Please enter a city name first.', 'error');
+      return;
+    }
+
+    // Disable button during request
+    const btn = document.getElementById('fetch_btn');
+    btn.disabled = true;
+    btn.textContent = 'Fetching…';
+    setStatus('Fetching weather data…', 'loading');
+
+    fetch('/weather?city=' + encodeURIComponent(city))
+      .then(response => response.json().then(data => ({ ok: response.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) {
+          setStatus(data.error || 'Failed to fetch weather data.', 'error');
+          return;
+        }
+
+        // Pre-fill every form field
+        WEATHER_FIELDS.forEach(id => {
+          document.getElementById(id).value = data[id];
+        });
+
+        // Store resolved city name (e.g. "London, United Kingdom")
+        document.getElementById('city_input').value  = data.city;
+        document.getElementById('city_hidden').value = data.city;
+
+        highlightFields('#d4edda');   // light-green flash
+        setStatus('Weather data loaded for ' + data.city, 'success');
+      })
+      .catch(() => {
+        setStatus('Network error. Please check your connection.', 'error');
+      })
+      .finally(() => {
+        btn.disabled = false;
+        btn.textContent = 'Fetch Weather';
+      });
+  }
+
+  // Allow pressing Enter inside the city box to trigger fetch
+  document.getElementById('city_input')
+    .addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        fetchWeather();
+      }
+    });
+
+  // Clear city info when the form is reset
+  function resetCity() {
+    document.getElementById('city_input').value  = '';
+    document.getElementById('city_hidden').value = '';
+    document.getElementById('city_status').textContent = '';
+    WEATHER_FIELDS.forEach(id => {
+      document.getElementById(id).style.backgroundColor = '';
+    });
+  }
+</script>
+
 {% endblock content %}
